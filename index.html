@@ -1,171 +1,167 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
   <!-- 既存のスクリプト群 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- ★JSZipライブラリを追加 -->
+  <!-- JSZipライブラリ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <link rel="stylesheet" href="style.css">
 
+  <link rel="stylesheet" href="style.css">
   <title>資産運用シミュレーション</title>
 </head>
 <body>
   <!-- 左パネルのファイル読込部分 -->
   <input type="file" id="importFile" accept=".zip,.json,.csv,.bin" style="display: none;" onchange="handleFileImport(event)">
 
-<div class="container" id="appContainer">
-  <!-- 左パネル -->
-  <div>
-    <!-- ★データ管理（インポート）カード -->
-    <div class="card io-card">
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-        <span style="font-size: 0.85rem; color: var(--text-sub); font-weight: bold;">📂 データ復元 (JSON / CSV / BIN)</span>
-        <button class="btn btn-outline" style="width: auto; padding: 6px 14px; font-size: 0.85rem;" onclick="document.getElementById('importFile').click()">
-          ファイルを選択して読込
-        </button>
-        <input type="file" id="importFile" accept=".json,.csv,.bin" style="display: none;" onchange="handleFileImport(event)">
-      </div>
-    </div>
+  <div class="container" id="appContainer">
+    <!-- スマホ用タブ状態（CSSだけで切り替える。JavaScriptでは操作しない） -->
+    <input class="mobile-tab-radio" type="radio" name="mobileView" id="mobileTabAssets" checked>
+    <input class="mobile-tab-radio" type="radio" name="mobileView" id="mobileTabDetails">
 
-    <div class="card">
-      <h2>1. シミュレーション期間</h2>
-      <div class="form-group">
-        <label>運用年数: <span id="yearsVal" class="range-value">30 年</span></label>
-        <input type="range" id="years" min="1" max="60" value="30" oninput="updateYears(this.value)">
-      </div>
-    </div>
-
-    <!-- 2. 銘柄追加カード（タブ行き来方式） -->
-    <div class="card">
-      <h2>2. 銘柄追加・初期設定</h2>
-      
-      <!-- タブボタン -->
-      <div class="tab-group">
-        <button class="tab-btn active" onclick="switchTab('tab-monthly')">毎月積立</button>
-        <button class="tab-btn" onclick="switchTab('tab-bonus')">ボーナス定額（任意）</button>
-      </div>
-
-      <!-- 共通入力：銘柄名 ＆ 想定年利 -->
-      <div class="form-group">
-        <label>銘柄名</label>
-        <input type="text" id="assetName" value="S&P500">
-      </div>
-      <div class="form-group">
-        <label>想定年利 (%)</label>
-        <input type="number" id="assetReturn" value="7.0" step="0.1">
-      </div>
-
-      <!-- タブ1: 毎月積立 -->
-      <div id="tab-monthly" class="tab-content active">
-        <div class="form-group">
-          <label>毎月の基本積立額 (円)</label>
-          <input type="number" id="assetAmount" value="35000" step="1000">
-        </div>
-      </div>
-
-      <!-- タブ2: ボーナス定額 -->
-      <div id="tab-bonus" class="tab-content">
-        <div class="form-group">
-          <label>ボーナス月（年2回まで選択可）</label>
-          <div style="display: flex; gap: 8px;">
-            <select id="bonusMonth1">
-              <option value="0">なし</option>
-              <option value="6" selected>6月</option>
-              <option value="1">1月</option>
-              <option value="3">3月</option>
-            </select>
-            <select id="bonusMonth2">
-              <option value="0">なし</option>
-              <option value="12" selected>12月</option>
-              <option value="7">7月</option>
-              <option value="9">9月</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>ボーナス1回あたりの追加額 (円)</label>
-          <input type="number" id="bonusAmount" value="0" step="10000">
-        </div>
-        <div class="form-group">
-          <label>ボーナスを開始する年 (何年目から？)</label>
-          <input type="number" id="bonusStartYear" value="1" min="1" max="60">
-        </div>
-      </div>
-
-      <button class="btn" onclick="addAsset()" style="margin-top: 8px;">この内容で銘柄を追加する</button>
-
-      <div id="assetList" class="item-list"></div>
-    </div>
-
-    <!-- 3. 途中の変更ルール一覧 -->
-    <div class="card">
-      <h2>3. 設定した変更ルール一覧</h2>
-      <div id="eventList" class="item-list"></div>
-    </div>
-  </div>
-
-  <!-- 右パネル -->
-  <div>
-    <!-- チャートカード（画像＋データ保存ボタン） -->
-    <div class="card" id="chartCard">
-      <div class="chart-header">
-        <h2 style="margin-bottom: 0;">資産推移チャート</h2>
-        <!-- ★保存形式選択 ＋ PNG＆データ同時出力 -->
-        <div class="export-controls" style="display: flex; gap: 8px; align-items: center;">
-          <select id="exportFormat" style="width: auto; padding: 6px 10px; font-size: 0.8rem;">
-            <option value="json">PNG + JSON</option>
-            <option value="csv">PNG + CSV</option>
-            <option value="bin">PNG + BIN (バイナリ)</option>
-          </select>
-          <button class="btn print-btn" onclick="exportWithData()">
-            💾 保存
+    <!-- 左パネル：銘柄設定 -->
+    <div class="settings-panel" id="assetSettingsPanel">
+      <!-- データ管理（インポート）カード -->
+      <div class="card io-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <span style="font-size: 0.85rem; color: var(--text-sub); font-weight: bold;">📂 データ復元 (JSON / CSV / BIN)</span>
+          <button class="btn btn-outline" style="width: auto; padding: 6px 14px; font-size: 0.85rem;" onclick="document.getElementById('importFile').click()">
+            ファイルを選択して読込
           </button>
         </div>
       </div>
-      <div class="chart-container">
-        <canvas id="simChart"></canvas>
+
+      <div class="card">
+        <h2>1. シミュレーション期間</h2>
+        <div class="form-group">
+          <label>運用年数: <span id="yearsVal" class="range-value">30 年</span></label>
+          <input type="range" id="years" min="1" max="60" value="30" oninput="updateYears(this.value)">
+        </div>
+      </div>
+
+      <!-- 2. 銘柄追加カード（既存の銘柄内タブはそのまま） -->
+      <div class="card">
+        <h2>2. 銘柄追加・初期設定</h2>
+        <div class="tab-group">
+          <button class="tab-btn active" onclick="switchTab('tab-monthly')">毎月積立</button>
+          <button class="tab-btn" onclick="switchTab('tab-bonus')">ボーナス定額（任意）</button>
+        </div>
+
+        <div class="form-group">
+          <label>銘柄名</label>
+          <input type="text" id="assetName" value="S&P500">
+        </div>
+        <div class="form-group">
+          <label>想定年利 (%)</label>
+          <input type="number" id="assetReturn" value="7.0" step="0.1">
+        </div>
+
+        <div id="tab-monthly" class="tab-content active">
+          <div class="form-group">
+            <label>毎月の基本積立額 (円)</label>
+            <input type="number" id="assetAmount" value="35000" step="1000">
+          </div>
+        </div>
+
+        <div id="tab-bonus" class="tab-content">
+          <div class="form-group">
+            <label>ボーナス月（年2回まで選択可）</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="bonusMonth1">
+                <option value="0">なし</option>
+                <option value="6" selected>6月</option>
+                <option value="1">1月</option>
+                <option value="3">3月</option>
+              </select>
+              <select id="bonusMonth2">
+                <option value="0">なし</option>
+                <option value="12" selected>12月</option>
+                <option value="7">7月</option>
+                <option value="9">9月</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>ボーナス1回あたりの追加額 (円)</label>
+            <input type="number" id="bonusAmount" value="0" step="10000">
+          </div>
+          <div class="form-group">
+            <label>ボーナスを開始する年 (何年目から？)</label>
+            <input type="number" id="bonusStartYear" value="1" min="1" max="60">
+          </div>
+        </div>
+
+        <button class="btn" onclick="addAsset()" style="margin-top: 8px;">この内容で銘柄を追加する</button>
+        <div id="assetList" class="item-list"></div>
+      </div>
+
+      <!-- 3. 途中の変更ルール一覧 -->
+      <div class="card">
+        <h2>3. 設定した変更ルール一覧</h2>
+        <div id="eventList" class="item-list"></div>
       </div>
     </div>
 
-    <!-- 指定年月編集画面 -->
-    <div class="card">
-      <h2>指定年月の詳細 ＆ 条件編集</h2>
-      <div class="form-group">
-        <label>時期指定スライダー: <span id="timeLabel" style="font-weight:bold; color:var(--accent);">0年 0ヶ月目</span></label>
-        <input type="range" id="timeSlider" min="0" max="360" value="0" oninput="onSliderChange(this.value)">
-      </div>
-
-      <div style="background:#0f172a; padding:12px; border-radius:6px; border:1px solid var(--border); margin-bottom:16px;">
-        <div style="font-size:0.8rem; color:var(--text-sub);">指定時期の合計資産額</div>
-        <div id="totalAssetsAtTime" style="font-size:1.3rem; font-weight:bold; color:var(--accent); margin-top:4px;">0 円</div>
-        <div id="breakdownAtTime" style="margin-top:8px; font-size:0.8rem; color:var(--text-sub);"></div>
-      </div>
-
-      <div class="form-group">
-        <label>編集対象の銘柄</label>
-        <select id="activeAssetSelect"></select>
-      </div>
-
-      <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;">
-        <label style="color: var(--accent); font-weight: bold; margin-bottom: 10px;">この年月からの条件変更</label>
-        
-        <div class="form-group">
-          <label>新しい毎月の積立額 (円)</label>
-          <input type="number" id="newMonthlyAmount" value="50000" step="1000">
+    <!-- 右パネル：グラフと年月詳細 -->
+    <div class="visual-panel">
+      <!-- チャートカード（画像＋データ保存ボタン） -->
+      <div class="card" id="chartCard">
+        <div class="chart-header">
+          <h2 style="margin-bottom: 0;">資産推移チャート</h2>
+          <div class="export-controls" style="display: flex; gap: 8px; align-items: center;">
+            <select id="exportFormat" style="width: auto; padding: 6px 10px; font-size: 0.8rem;">
+              <option value="json">PNG + JSON</option>
+              <option value="csv">PNG + CSV</option>
+              <option value="bin">PNG + BIN (バイナリ)</option>
+            </select>
+            <button class="btn print-btn" onclick="exportWithData()">💾 保存</button>
+          </div>
         </div>
-
-        <div class="form-group">
-          <label>新しいボーナス1回あたりの追加額 (円)</label>
-          <input type="number" id="newBonusAmount" value="100000" step="10000">
+        <div class="chart-container">
+          <canvas id="simChart"></canvas>
         </div>
-
-        <button class="btn" onclick="applyTimelineChanges()">この年月から指定条件に変更・適用する</button>
       </div>
+
+      <!-- 指定年月編集画面 -->
+      <div class="card" id="detailCard">
+        <h2>指定年月の詳細 ＆ 条件編集</h2>
+        <div class="form-group">
+          <label>時期指定スライダー: <span id="timeLabel" style="font-weight:bold; color:var(--accent);">0年 0ヶ月目</span></label>
+          <input type="range" id="timeSlider" min="0" max="360" value="0" oninput="onSliderChange(this.value)">
+        </div>
+        <div style="background:#0f172a; padding:12px; border-radius:6px; border:1px solid var(--border); margin-bottom:16px;">
+          <div style="font-size:0.8rem; color:var(--text-sub);">指定時期の合計資産額</div>
+          <div id="totalAssetsAtTime" style="font-size:1.3rem; font-weight:bold; color:var(--accent); margin-top:4px;">0 円</div>
+          <div id="breakdownAtTime" style="margin-top:8px; font-size:0.8rem; color:var(--text-sub);"></div>
+        </div>
+        <div class="form-group">
+          <label>編集対象の銘柄</label>
+          <select id="activeAssetSelect"></select>
+        </div>
+        <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;">
+          <label style="color: var(--accent); font-weight: bold; margin-bottom: 10px;">この年月からの条件変更</label>
+          <div class="form-group">
+            <label>新しい毎月の積立額 (円)</label>
+            <input type="number" id="newMonthlyAmount" value="50000" step="1000">
+          </div>
+          <div class="form-group">
+            <label>新しいボーナス1回あたりの追加額 (円)</label>
+            <input type="number" id="newBonusAmount" value="100000" step="10000">
+          </div>
+          <button class="btn" onclick="applyTimelineChanges()">この年月から指定条件に変更・適用する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- スマホ時だけ表示する画面切替タブ -->
+    <div class="mobile-tabs" aria-label="表示画面の切り替え">
+      <label class="mobile-tab-btn" for="mobileTabAssets">銘柄設定</label>
+      <label class="mobile-tab-btn" for="mobileTabDetails">年月詳細</label>
     </div>
   </div>
-</div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
